@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: mpp-exam-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start:server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        fromService:
+          type: web
+          name: mpp-exam-backend
+          property: port
+    healthCheckPath: /health 

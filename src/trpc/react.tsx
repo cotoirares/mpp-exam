@@ -9,6 +9,7 @@ import SuperJSON from "superjson";
 
 import { type AppRouter } from "~/server/api/root";
 import { createQueryClient } from "./query-client";
+import { env } from "~/env";
 
 let clientQueryClientSingleton: QueryClient | undefined = undefined;
 const getQueryClient = () => {
@@ -57,6 +58,28 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
             headers.set("x-trpc-source", "nextjs-react");
             return headers;
           },
+          fetch: (url, options) => {
+            // Custom fetch with better error handling
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+            
+            return fetch(url, {
+              ...options,
+              signal: controller.signal,
+            }).then((response) => {
+              clearTimeout(timeoutId);
+              return response;
+            }).catch((error) => {
+              clearTimeout(timeoutId);
+              // Don't log aborted requests as errors
+              if (error.name === 'AbortError') {
+                console.log('🔄 tRPC request aborted (likely due to component unmount)');
+                return Promise.reject(error);
+              }
+              console.error('❌ tRPC fetch error:', error);
+              return Promise.reject(error);
+            });
+          },
         }),
       ],
     }),
@@ -72,6 +95,12 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 }
 
 function getBaseUrl() {
+  // Use environment variable for deployed backend
+  if (env.NEXT_PUBLIC_BACKEND_URL) {
+    return env.NEXT_PUBLIC_BACKEND_URL;
+  }
+  
+  // Fallback to default behavior for local development
   if (typeof window !== "undefined") return window.location.origin;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
